@@ -1,0 +1,128 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  BUN_VERSION: 1.4.2
+  GITLEAKS_VERSION: 8.30.1
+  # sha256 of gitleaks_8.30.1_linux_x64.tar.gz, from the release's own checksums file.
+  GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The secret scan diffs commits, so the history it diffs against must be present.
+          fetch-depth: 0
+
+      - name: Set up Bun and install dependencies
+        uses: ./.github/actions/setup
+
+      - name: Scan the change range for secrets
+        run: |
+          set -euo pipefail
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfL -o "$archive" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${archive}"
+          echo "${GITLEAKS_SHA256}  ${archive}" | sha256sum -c -
+          tar -xzf "$archive" gitleaks
+          base="${{ github.event.pull_request.base.sha || github.event.before }}"
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
+            echo "No base commit to diff against; scanning the checked-out history."
+            ./gitleaks detect --no-banner --redact --verbose
+          else
+            echo "Scanning ${base}..${{ github.sha }} for secrets."
+            ./gitleaks detect --no-banner --redact --verbose --log-opts "${base}..${{ github.sha }}"
+          fi
+
+      # Non-blocking on purpose. The advisories reported at the time of writing are four high
+      # brace-expansion issues reached only through eslint/typescript-eslint's minimatch, i.e. in
+      # dev tooling with no runtime path in the shipped CLI. Clearing them means upgrading that
+      # toolchain, which is a dependency change rather than a CI change; the step still reports
+      # the advisories in the log and the summary below.
+      - name: Audit dependencies (non-blocking)
+        continue-on-error: true
+        run: bun audit --audit-level=high
+
+      - name: Check formatting
+        run: bunx prettier --check .
+
+      - name: Lint TypeScript
+        run: bunx eslint . --cache
+
+      - name: Summarise lint results
+        if: always()
+        run: |
+          {
+            echo "### Lint"
+            echo ""
+            echo "| Check | Command |"
+            echo "| --- | --- |"
+            echo "| Secrets | gitleaks v${GITLEAKS_VERSION} over the change range |"
+            echo "| Advisories | \`bun audit --audit-level=high\` (non-blocking, see job log) |"
+            echo "| Formatting | \`bunx prettier --check .\` |"
+            echo "| Code | \`bunx eslint . --cache\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  types-and-tests:
+    name: Types and tests
+    runs-on: ubuntu-latest
+    # The measured suite takes ~14.5 minutes on a local Apple-silicon machine (the CLI
+    # integration tests spawn real processes), so fifteen minutes leaves a slower runner no
+    # headroom at all. Thirty keeps the same cap for every other job while letting this one
+    # finish instead of failing on the clock.
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Bun and install dependencies
+        uses: ./.github/actions/setup
+
+      - name: Typecheck
+        run: bun run check
+
+      - name: Test
+        run: bun run test
+
+  smoke:
+    name: CLI smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Bun and install dependencies
+        uses: ./.github/actions/setup
+
+      # ytd has no bundle step: package.json's `bin` points at src/cli.ts, which Bun executes
+      # directly. The meaningful stand-in for a build is the real entry point booting and
+      # printing its usage, which proves the module graph loads and the argument parser runs.
+      - name: Boot the CLI
+        run: |
+          set -euo pipefail
+          output="$(bun run --bun src/cli.ts --help)"
+          printf '%s\n' "$output"
+          grep -q "Usage: ytd" <<<"$output"
