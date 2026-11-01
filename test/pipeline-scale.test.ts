@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runCommand } from "../src/process.ts";
@@ -49,7 +49,7 @@ function fixture(): { root: string; driver: string; cleanup: () => void } {
 	const src = (name: string) => JSON.stringify(join(import.meta.dir, "../src", name));
 	writeFileSync(
 		driver,
-		`import { existsSync, mkdirSync } from "node:fs";
+		`import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { performance } from "node:perf_hooks";
 import { join } from "node:path";
 import { CONCURRENCY, DATA_DIR, DEFAULTS } from ${src("config.ts")};
@@ -249,8 +249,9 @@ const rows = manifest.all();
 const unfinished = rows.filter((row) => !["distilled", "no_captions"].includes(row.status));
 const queuedFetch = manifest.jobs.depth("fetch");
 limiter.close();
-console.log(
-  JSON.stringify({
+// The result travels as a file rather than one very large stdout line: a pipe write can still
+// be in flight when the process exits, which made this fixture flaky under a slower runner.
+writeFileSync(process.env.YTD_SCALE_OUT, JSON.stringify({
     discovered: listed.size,
     registered: rows.length,
     runId: run.id,
@@ -277,8 +278,7 @@ console.log(
     // Extraction of a source completed while other sources were still being fetched.
     overlapped: samples.some((sample) => sample.distilled > 0 && sample.fetched < sample.total),
     rssMb: process.memoryUsage().rss / (1024 * 1024)
-  })
-);
+  }));
 manifest.close();
 `
 	);
@@ -291,6 +291,7 @@ manifest.close();
 
 async function run(size: number) {
 	const f = fixture();
+	const outPath = join(f.root, "out.json");
 	try {
 		const result = await runCommand([process.execPath, f.driver], {
 			env: {
@@ -298,14 +299,15 @@ async function run(size: number) {
 				HOME: join(f.root, "home"),
 				PATH: `${join(f.root, "bin")}:${process.env.PATH}`,
 				YTD_SCALE_ROWS: String(size),
-				YTD_SCALE_AGENT: join(f.root, "bin", "scale-agent")
+				YTD_SCALE_AGENT: join(f.root, "bin", "scale-agent"),
+				YTD_SCALE_OUT: outPath
 			},
 			timeoutMs: 600_000
 		});
 		expect(result.stderr).toBe("");
 		expect(result.code).toBe(0);
 		return {
-			out: JSON.parse(result.stdout) as {
+			out: JSON.parse(readFileSync(outPath, "utf8")) as {
 				discovered: number;
 				registered: number;
 				distilled: number;

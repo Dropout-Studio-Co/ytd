@@ -29,7 +29,13 @@ const args = process.argv.slice(2);
 const url = args.at(-1);
 const id = new URL(url).searchParams.get("v");
 const note = (line) => appendFileSync(process.env.YTD_FIXTURE_TIMELINE, Date.now() + " " + line + "\\n");
+// Every admitted fetch says so as it starts: the wave the pool admits before the throttle is
+// then visible as events, not inferred from a progress sample that may not have been taken yet.
+note("start " + id);
 if (id === process.env.YTD_FIXTURE_THROTTLED) {
+  // Report the throttle only after the admitted wave has had time to start, so the fixture
+  // measures a pipeline that was genuinely running wide rather than one that never got there.
+  await Bun.sleep(60);
   note("throttled " + id);
   console.error("ERROR: Sign in to confirm you are not a bot. Use --cookies-from-browser.");
   process.exit(1);
@@ -140,14 +146,22 @@ test("a throttle narrows real admission instead of only being recorded", async (
 			.split("\n")
 			.map((line) => JSON.parse(line) as { t: number; active: number });
 		expect(samples.length).toBeGreaterThan(10);
-		const throttledAt = Number(
-			readFileSync(f.timeline, "utf8").trim().split("\n")[0]!.split(" ")[0]
-		);
+		const timeline = readFileSync(f.timeline, "utf8")
+			.trim()
+			.split("\n")
+			.map((line) => {
+				const [t, kind] = line.split(" ");
+				return { t: Number(t), kind: kind! };
+			});
+		const throttledAt = timeline.find((entry) => entry.kind === "throttled")!.t;
 		// The configured ceiling is never exceeded, and the pool really does reach it before the
 		// throttle, so narrowing is measured against a pipeline that was actually running wide.
 		expect(Math.max(...samples.map((s) => s.active))).toBeLessThanOrEqual(FETCH_CEILING);
+		// Admission itself is the evidence: several fetches had already started when the throttle
+		// arrived. Reading this from the timeline rather than a sample keeps it deterministic on a
+		// fast machine, where the first progress tick can land after the throttle.
 		expect(
-			Math.max(...samples.filter((s) => s.t < throttledAt).map((s) => s.active))
+			timeline.filter((entry) => entry.kind === "start" && entry.t < throttledAt).length
 		).toBeGreaterThan(1);
 		// After the throttle has been observed and the in-flight wave has drained, admission is
 		// governed by the narrowed controller: halved exactly once, from four to two.

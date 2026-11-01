@@ -84,11 +84,7 @@ jobs:
   types-and-tests:
     name: Types and tests
     runs-on: ubuntu-latest
-    # The measured suite takes ~14.5 minutes on a local Apple-silicon machine (the CLI
-    # integration tests spawn real processes), so fifteen minutes leaves a slower runner no
-    # headroom at all. Thirty keeps the same cap for every other job while letting this one
-    # finish instead of failing on the clock.
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
