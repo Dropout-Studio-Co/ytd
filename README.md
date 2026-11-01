@@ -13,10 +13,10 @@ CLI (Claude, Codex, Pi, OpenCode, or a trusted custom command) with the model yo
 API keys of its own, no hosted service, nothing deployed.
 
 Part of the [Dropout Studio tools](https://dropoutstudio.co/tools-apps), alongside
-[Day Zero](https://github.com/beyourahi/day-zero),
-[Order Processor](https://github.com/beyourahi/order-processor),
-[Invoice Generator](https://github.com/beyourahi/invoice-generator) and
-[Username Extractor](https://github.com/beyourahi/username-extractor).
+[Day Zero](https://github.com/Dropout-Studio-Co/day-zero),
+[Order Processor](https://github.com/Dropout-Studio-Co/order-processor),
+[Invoice Generator](https://github.com/Dropout-Studio-Co/invoice-generator) and
+[Username Extractor](https://github.com/Dropout-Studio-Co/username-extractor).
 
 ## Requirements
 

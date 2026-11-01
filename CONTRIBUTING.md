@@ -50,7 +50,7 @@ When in doubt, open an issue to discuss the change before writing code.
 ### Installation
 
 ```bash
-git clone https://github.com/beyourahi/ytd.git
+git clone https://github.com/Dropout-Studio-Co/ytd.git
 cd ytd
 bun install --frozen-lockfile
 bun link        # exposes the `ytd` command
