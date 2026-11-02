@@ -92,6 +92,11 @@ export class JobScheduler {
 		if (!columns.some((column) => column.name === "owner_pid"))
 			db.run("ALTER TABLE jobs ADD COLUMN owner_pid INTEGER");
 		db.run("CREATE INDEX IF NOT EXISTS jobs_eligible ON jobs(run_id, stage, state, available_at)");
+		// Additive and idempotent, like the index above. Every claim asks which pending units have
+		// already spent their attempt budget; without `attempts` in the index that question scans
+		// the whole pending set, which makes claiming a channel quadratic in its inventory. With
+		// it the same question is a range seek that normally finds nothing.
+		db.run("CREATE INDEX IF NOT EXISTS jobs_exhausted ON jobs(run_id, stage, state, attempts)");
 	}
 
 	/**

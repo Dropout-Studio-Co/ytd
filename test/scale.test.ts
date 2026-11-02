@@ -1,9 +1,8 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { rmSync } from "node:fs";
 import { Manifest } from "../src/manifest.ts";
 import type { VideoRow } from "../src/manifest.ts";
+import { scratchDir } from "./scratch.ts";
 
 /**
  * Scale and recovery behaviour of the durable queue.
@@ -19,7 +18,7 @@ import type { VideoRow } from "../src/manifest.ts";
 const profile = { agent: "test", model: "exact-model", routing: { verified: false } };
 
 function fixture(): { dir: string; cleanup: () => void } {
-	const dir = mkdtempSync(join(tmpdir(), "ytd-scale-"));
+	const dir = scratchDir("ytd-scale-");
 	return { dir, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
 }
 
