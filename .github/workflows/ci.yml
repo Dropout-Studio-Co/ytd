@@ -39,33 +39,40 @@ jobs:
         run: |
           set -euo pipefail
           archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
-          curl -sSfL -o "$archive" \
+          curl -sSfL -o "$RUNNER_TEMP/$archive" \
             "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${archive}"
-          echo "${GITLEAKS_SHA256}  ${archive}" | sha256sum -c -
-          tar -xzf "$archive" gitleaks
+          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/$archive" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" gitleaks
           base="${{ github.event.pull_request.base.sha || github.event.before }}"
           if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
             echo "No base commit to diff against; scanning the checked-out history."
-            ./gitleaks detect --no-banner --redact --verbose
+            "$RUNNER_TEMP/gitleaks" git --no-banner --redact --exit-code 1 --verbose .
           else
             echo "Scanning ${base}..${{ github.sha }} for secrets."
-            ./gitleaks detect --no-banner --redact --verbose --log-opts "${base}..${{ github.sha }}"
+            "$RUNNER_TEMP/gitleaks" git --no-banner --redact --exit-code 1 --verbose --log-opts "${base}..${{ github.sha }}" .
           fi
+
+      # Critical advisories gate. The lockfile currently reports none, so this stays green today
+      # and fails the job the moment a critical reaches the shipped dependency tree.
+      - name: Audit dependencies (critical, blocking)
+        run: bun audit --audit-level=critical
 
       # Non-blocking on purpose. The advisories reported at the time of writing are four high
       # brace-expansion issues reached only through eslint/typescript-eslint's minimatch, i.e. in
       # dev tooling with no runtime path in the shipped CLI. Clearing them means upgrading that
       # toolchain, which is a dependency change rather than a CI change; the step still reports
       # the advisories in the log and the summary below.
-      - name: Audit dependencies (non-blocking)
+      - name: Audit dependencies (high, informational)
         continue-on-error: true
         run: bun audit --audit-level=high
 
       - name: Check formatting
         run: bunx prettier --check .
 
+      # No `--cache`: the cache file is discarded with the runner, and persisting it would need an
+      # actions/cache round trip plus a cache location override to save ~7s on a ~10s lint.
       - name: Lint TypeScript
-        run: bunx eslint . --cache
+        run: bunx eslint .
 
       - name: Summarise lint results
         if: always()
@@ -75,10 +82,11 @@ jobs:
             echo ""
             echo "| Check | Command |"
             echo "| --- | --- |"
-            echo "| Secrets | gitleaks v${GITLEAKS_VERSION} over the change range |"
-            echo "| Advisories | \`bun audit --audit-level=high\` (non-blocking, see job log) |"
+            echo "| Secrets | gitleaks v${GITLEAKS_VERSION} \`git\` over the change range |"
+            echo "| Advisories (critical) | \`bun audit --audit-level=critical\` (blocking) |"
+            echo "| Advisories (high) | \`bun audit --audit-level=high\` (non-blocking, see job log) |"
             echo "| Formatting | \`bunx prettier --check .\` |"
-            echo "| Code | \`bunx eslint . --cache\` |"
+            echo "| Code | \`bunx eslint .\` |"
           } >> "$GITHUB_STEP_SUMMARY"
 
   types-and-tests:
