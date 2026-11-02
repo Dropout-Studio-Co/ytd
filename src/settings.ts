@@ -250,6 +250,10 @@ export function parseArgs(argv: string[]): CliArgs {
 				if (duplicate(textualKey)) throw new Error(`${flag} was supplied more than once`);
 				out[textualKey] = value;
 			}
+		} else if (out.command === "help") {
+			// `--help` is a terminal instruction: a source written before or after it must not turn
+			// the request for usage into an argument error.
+			continue;
 		} else if (!out.url && out.command === "run") out.url = arg;
 		else throw new Error(`Unexpected argument: ${arg}`);
 	}
