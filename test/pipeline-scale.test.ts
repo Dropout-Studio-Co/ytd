@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { runCommand } from "../src/process.ts";
+import { scratchDir } from "./scratch.ts";
 
 /**
  * Integrated scale verification: 100, 1,000 and 10,000 videos through the real pipeline.
@@ -18,6 +18,10 @@ import { runCommand } from "../src/process.ts";
  * production code already has: the yt-dlp transcript request (one process per video) and the
  * model call (paid inference). Everything between them — leases, adaptive admission, retries,
  * checkpoints, status transitions, candidate storage, dedup — is the shipped implementation.
+ *
+ * The fixture lives on memory-backed scratch space (`./scratch.ts`): what it proves is
+ * orchestration and bounded memory, and a runner's disk fsync per scheduler commit would
+ * otherwise be the dominant cost of the measurement.
  */
 
 const WORKLOAD_SIZES = [100, 1_000] as const;
@@ -31,7 +35,7 @@ for (let i = 0; i < Number(process.env.YTD_SCALE_ROWS); i++) {
 `;
 
 function fixture(): { root: string; driver: string; cleanup: () => void } {
-	const root = mkdtempSync(join(tmpdir(), "ytd-pipeline-scale-"));
+	const root = scratchDir("ytd-pipeline-scale-");
 	const bin = join(root, "bin");
 	const home = join(root, "home");
 	mkdirSync(bin, { recursive: true });
