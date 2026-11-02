@@ -13,5 +13,5 @@ output/
 # bench: locally compiled Rust comparison kernels
 .build/
 
-# eslint --cache output (CI passes --cache too); regenerable, never committed.
+# eslint --cache output from local runs; regenerable, never committed.
 .eslintcache
