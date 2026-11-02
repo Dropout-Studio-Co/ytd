@@ -81,8 +81,8 @@ jobs:
             echo "| Code | \`bunx eslint . --cache\` |"
           } >> "$GITHUB_STEP_SUMMARY"
 
-  types-and-tests:
-    name: Types and tests
+  types:
+    name: Typecheck
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -97,8 +97,28 @@ jobs:
       - name: Typecheck
         run: bun run check
 
-      - name: Test
-        run: bun run test
+  # The suite is the slowest gate (~2 min serially) because several tests spawn the real CLI.
+  # Three deterministic shards run it in parallel; each shard is a disjoint slice of the file
+  # list, so the union still covers every test file exactly once.
+  tests:
+    name: Tests (${{ matrix.shard }}/3)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Bun and install dependencies
+        uses: ./.github/actions/setup
+
+      - name: Test shard ${{ matrix.shard }} of 3
+        run: bash scripts/test-shard.sh ${{ matrix.shard }} 3
 
   smoke:
     name: CLI smoke
