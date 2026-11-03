@@ -14,9 +14,6 @@
 		"test": "bun test",
 		"bench": "bun run bench/run.ts"
 	},
-	"overrides": {
-		"minimatch": "^11.0.4"
-	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
 		"@typescript/native": "npm:typescript@^7.0.2",
