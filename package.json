@@ -14,11 +14,14 @@
 		"test": "bun test",
 		"bench": "bun run bench/run.ts"
 	},
+	"overrides": {
+		"minimatch": "^11.0.4"
+	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
 		"@typescript/native": "npm:typescript@^7.0.2",
 		"bun-types": "^1.4.4",
-		"eslint": "^10.13.0",
+		"eslint": "^10.14.0",
 		"eslint-config-prettier": "^10.1.8",
 		"prettier": "^3.9.10",
 		"typescript": "npm:@typescript/typescript6@^6.0.2",
