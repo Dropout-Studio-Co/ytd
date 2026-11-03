@@ -57,11 +57,12 @@ jobs:
       - name: Audit dependencies (critical, blocking)
         run: bun audit --audit-level=critical
 
-      # Non-blocking on purpose. The advisories reported at the time of writing are four high
-      # brace-expansion issues reached only through eslint/typescript-eslint's minimatch, i.e. in
-      # dev tooling with no runtime path in the shipped CLI. Clearing them means upgrading that
-      # toolchain, which is a dependency change rather than a CI change; the step still reports
-      # the advisories in the log and the summary below.
+      # Non-blocking on purpose: it surfaces new advisories without gating the build, while the
+      # critical gate above still blocks. The tree currently reports none — the four high
+      # brace-expansion issues were cleared by eslint 10.14.0 (which requires minimatch 10.2.6)
+      # and the remaining minimatch advisory by the `overrides.minimatch` pin in package.json;
+      # both reach only eslint/typescript-eslint, i.e. dev tooling with no runtime path in the
+      # shipped CLI. The step still reports anything new in the log and the summary below.
       - name: Audit dependencies (high, informational)
         continue-on-error: true
         run: bun audit --audit-level=high
